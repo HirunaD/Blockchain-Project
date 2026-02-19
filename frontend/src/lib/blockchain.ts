@@ -1,26 +1,52 @@
-import { BrowserProvider, Contract, formatUnits } from 'ethers';
+import { BrowserProvider, Contract, EventLog } from 'ethers';
 
-// Smart Contract ABI (simplified for demonstration)
+// Smart Contract ABI matching AssignmentHashing.sol
 export const CONTRACT_ABI = [
-  "function setDeadline(string assignmentId, uint256 deadline) external",
-  "function submitAssignment(string studentId, string assignmentId, string fileHash) external",
-  "function getSubmission(string studentId, string assignmentId) external view returns (string fileHash, uint256 timestamp, address submitter)",
-  "function verifySubmission(string studentId, string assignmentId, string fileHash) external view returns (bool)",
-  "function getSubmissionHistory(string assignmentId) external view returns (tuple(string studentId, string fileHash, uint256 timestamp, address submitter)[])",
-  "function getDeadline(string assignmentId) external view returns (uint256)",
-  "event AssignmentSubmitted(string indexed studentId, string indexed assignmentId, string fileHash, uint256 timestamp)",
-  "event DeadlineSet(string indexed assignmentId, uint256 deadline)"
+  {
+    "inputs": [
+      { "internalType": "string", "name": "_assignmentId", "type": "string" },
+      { "internalType": "string", "name": "_fileHash", "type": "string" }
+    ],
+    "name": "submitAssignment",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "_student", "type": "address" },
+      { "internalType": "string", "name": "_assignmentId", "type": "string" }
+    ],
+    "name": "getSubmission",
+    "outputs": [
+      { "internalType": "string", "name": "", "type": "string" },
+      { "internalType": "uint256", "name": "", "type": "uint256" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "address", "name": "student", "type": "address" },
+      { "indexed": false, "internalType": "string", "name": "assignmentId", "type": "string" },
+      { "indexed": false, "internalType": "string", "name": "fileHash", "type": "string" },
+      { "indexed": false, "internalType": "uint256", "name": "timestamp", "type": "uint256" }
+    ],
+    "name": "AssignmentSubmitted",
+    "type": "event"
+  }
 ];
 
-// Demo contract address (replace with actual deployed contract)
-export const CONTRACT_ADDRESS = "0x0000000000000000000000000000000000000000";
+// Contract address - update this after deploying the contract
+// For local Hardhat: usually 0x5FbDB2315678afecb367f032d93F642f64180aa3
+export const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS || "0x5FbDB2315678afecb367f032d93F642f64180aa3";
 
 export interface Submission {
-  studentId: string;
+  studentAddress: string;
   assignmentId: string;
   fileHash: string;
   timestamp: Date;
-  submitter: string;
 }
 
 export interface WalletState {
@@ -89,28 +115,101 @@ export const shortenAddress = (address: string): string => {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 };
 
-// Demo mode functions (for when no blockchain is connected)
+// Get read-only contract (for querying)
+export const getReadOnlyContract = async (): Promise<Contract> => {
+  if (!isMetaMaskInstalled()) {
+    throw new Error('MetaMask is not installed');
+  }
+  const provider = new BrowserProvider(window.ethereum);
+  return new Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+};
+
+// Submit assignment to blockchain
+export const submitAssignmentToBlockchain = async (
+  assignmentId: string,
+  fileHash: string
+): Promise<{ txHash: string }> => {
+  const contract = await getContract();
+  const tx = await contract.submitAssignment(assignmentId, fileHash);
+  const receipt = await tx.wait();
+  return { txHash: receipt.hash };
+};
+
+// Get submission from blockchain
+export const getSubmissionFromBlockchain = async (
+  studentAddress: string,
+  assignmentId: string
+): Promise<{ fileHash: string; timestamp: Date } | null> => {
+  try {
+    const contract = await getReadOnlyContract();
+    const [fileHash, timestamp] = await contract.getSubmission(studentAddress, assignmentId);
+    if (!fileHash || timestamp === 0n) {
+      return null;
+    }
+    return {
+      fileHash,
+      timestamp: formatTimestamp(timestamp)
+    };
+  } catch {
+    return null;
+  }
+};
+
+// Get all submissions from blockchain events
+export const getAllSubmissions = async (): Promise<Submission[]> => {
+  try {
+    const contract = await getReadOnlyContract();
+    const filter = contract.filters.AssignmentSubmitted();
+    const events = await contract.queryFilter(filter, -10000) as EventLog[];
+    
+    return events.map(event => ({
+      studentAddress: event.args[0],
+      assignmentId: event.args[1],
+      fileHash: event.args[2],
+      timestamp: formatTimestamp(event.args[3])
+    }));
+  } catch {
+    return [];
+  }
+};
+
+// Verify submission on blockchain
+export const verifySubmissionOnBlockchain = async (
+  studentAddress: string,
+  assignmentId: string,
+  fileHash: string
+): Promise<{ verified: boolean; timestamp?: Date }> => {
+  try {
+    const submission = await getSubmissionFromBlockchain(studentAddress, assignmentId);
+    if (!submission) {
+      return { verified: false };
+    }
+    const verified = submission.fileHash.toLowerCase() === fileHash.toLowerCase();
+    return { verified, timestamp: submission.timestamp };
+  } catch {
+    return { verified: false };
+  }
+};
+
+// Demo submissions for fallback when blockchain is not available
 export const DEMO_SUBMISSIONS: Submission[] = [
   {
-    studentId: 'STU001',
+    studentAddress: '0x742d35Cc6634C0532925a3b844Bc9e7595f8aB21',
     assignmentId: 'ASN001',
     fileHash: '0x7d865e959b2466918c9863afca942d0fb89d7c9ac0c99bafc3749504ded97730',
-    timestamp: new Date('2024-01-15T10:30:00'),
-    submitter: '0x742d35Cc6634C0532925a3b844Bc9e7595f8aB21'
+    timestamp: new Date('2024-01-15T10:30:00')
   },
   {
-    studentId: 'STU002',
+    studentAddress: '0x8ba1f109551bD432803012645Ac136ddd64DBA72',
     assignmentId: 'ASN001',
     fileHash: '0x3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d',
-    timestamp: new Date('2024-01-15T11:45:00'),
-    submitter: '0x8ba1f109551bD432803012645Ac136ddd64DBA72'
+    timestamp: new Date('2024-01-15T11:45:00')
   },
   {
-    studentId: 'STU003',
+    studentAddress: '0xdD2FD4581271e230360230F9337D5c0430Bf44C0',
     assignmentId: 'ASN002',
     fileHash: '0x2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae',
-    timestamp: new Date('2024-01-16T09:15:00'),
-    submitter: '0xdD2FD4581271e230360230F9337D5c0430Bf44C0'
+    timestamp: new Date('2024-01-16T09:15:00')
   }
 ];
 

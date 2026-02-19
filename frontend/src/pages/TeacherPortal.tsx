@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,7 +7,7 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useWallet } from '@/hooks/useWallet';
-import { DEMO_SUBMISSIONS, shortenAddress } from '@/lib/blockchain';
+import { DEMO_SUBMISSIONS, shortenAddress, getAllSubmissions, Submission } from '@/lib/blockchain';
 import { toast } from 'sonner';
 import {
   BookOpen,
@@ -19,7 +19,8 @@ import {
   Wallet,
   FileText,
   History,
-  Hash
+  Hash,
+  RefreshCw
 } from 'lucide-react';
 
 const TeacherPortal = () => {
@@ -29,6 +30,31 @@ const TeacherPortal = () => {
   const [isSetting, setIsSetting] = useState(false);
   const [deadlines, setDeadlines] = useState<{ id: string; deadline: Date }[]>([]);
   const [filterAssignment, setFilterAssignment] = useState('');
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [isLoadingSubmissions, setIsLoadingSubmissions] = useState(false);
+
+  // Load submissions from blockchain
+  const loadSubmissions = async () => {
+    setIsLoadingSubmissions(true);
+    try {
+      const blockchainSubmissions = await getAllSubmissions();
+      if (blockchainSubmissions.length > 0) {
+        setSubmissions(blockchainSubmissions);
+      } else {
+        // Fall back to demo data if no blockchain submissions
+        setSubmissions(DEMO_SUBMISSIONS);
+      }
+    } catch (error) {
+      console.error('Failed to load submissions:', error);
+      setSubmissions(DEMO_SUBMISSIONS);
+    } finally {
+      setIsLoadingSubmissions(false);
+    }
+  };
+
+  useEffect(() => {
+    loadSubmissions();
+  }, []);
 
   const handleSetDeadline = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,8 +90,8 @@ const TeacherPortal = () => {
   };
 
   const filteredSubmissions = filterAssignment
-    ? DEMO_SUBMISSIONS.filter(s => s.assignmentId.toLowerCase().includes(filterAssignment.toLowerCase()))
-    : DEMO_SUBMISSIONS;
+    ? submissions.filter(s => s.assignmentId.toLowerCase().includes(filterAssignment.toLowerCase()))
+    : submissions;
 
   return (
     <div className="container mx-auto px-4 py-12 animate-fade-in">
@@ -237,14 +263,25 @@ const TeacherPortal = () => {
                       All assignments submitted to the blockchain
                     </CardDescription>
                   </div>
-                  <div className="relative w-full sm:w-64">
-                    <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Filter by Assignment ID"
-                      value={filterAssignment}
-                      onChange={(e) => setFilterAssignment(e.target.value)}
-                      className="pl-10"
-                    />
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={loadSubmissions}
+                      disabled={isLoadingSubmissions}
+                    >
+                      <RefreshCw className={`w-4 h-4 mr-2 ${isLoadingSubmissions ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </Button>
+                    <div className="relative w-full sm:w-48">
+                      <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Filter by Assignment"
+                        value={filterAssignment}
+                        onChange={(e) => setFilterAssignment(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
                   </div>
                 </div>
               </CardHeader>
@@ -253,25 +290,24 @@ const TeacherPortal = () => {
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-muted/50">
-                        <TableHead>Student ID</TableHead>
+                        <TableHead>Student Address</TableHead>
                         <TableHead>Assignment ID</TableHead>
                         <TableHead className="hidden md:table-cell">File Hash</TableHead>
                         <TableHead>Timestamp</TableHead>
-                        <TableHead className="hidden sm:table-cell">Submitter</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredSubmissions.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                            No submissions found
+                          <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                            {isLoadingSubmissions ? 'Loading...' : 'No submissions found'}
                           </TableCell>
                         </TableRow>
                       ) : (
                         filteredSubmissions.map((submission, index) => (
                           <TableRow key={index} className="hover:bg-muted/30">
-                            <TableCell className="font-mono font-medium">
-                              {submission.studentId}
+                            <TableCell className="font-mono text-sm">
+                              {shortenAddress(submission.studentAddress)}
                             </TableCell>
                             <TableCell>
                               <StatusBadge variant="info">{submission.assignmentId}</StatusBadge>
@@ -290,9 +326,6 @@ const TeacherPortal = () => {
                                 {submission.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                               </span>
                             </TableCell>
-                            <TableCell className="hidden sm:table-cell font-mono text-xs">
-                              {shortenAddress(submission.submitter)}
-                            </TableCell>
                           </TableRow>
                         ))
                       )}
@@ -301,7 +334,7 @@ const TeacherPortal = () => {
                 </div>
 
                 <div className="mt-4 text-sm text-muted-foreground text-center">
-                  Showing {filteredSubmissions.length} of {DEMO_SUBMISSIONS.length} submissions
+                  Showing {filteredSubmissions.length} of {submissions.length} submissions
                 </div>
               </CardContent>
             </Card>

@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { useWallet } from '@/hooks/useWallet';
-import { generateFileHash, shortenAddress } from '@/lib/blockchain';
+import { generateFileHash, shortenAddress, submitAssignmentToBlockchain } from '@/lib/blockchain';
+import { logSubmission } from '@/lib/api';
 import { toast } from 'sonner';
 import {
   GraduationCap,
@@ -21,13 +22,13 @@ import {
 
 const StudentPortal = () => {
   const { isConnected, address, connect, isConnecting } = useWallet();
-  const [studentId, setStudentId] = useState('');
   const [assignmentId, setAssignmentId] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [fileHash, setFileHash] = useState('');
   const [isHashing, setIsHashing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [txHash, setTxHash] = useState('');
 
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -52,10 +53,6 @@ const StudentPortal = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!studentId.trim()) {
-      toast.error('Please enter your Student ID');
-      return;
-    }
     if (!assignmentId.trim()) {
       toast.error('Please enter the Assignment ID');
       return;
@@ -72,24 +69,38 @@ const StudentPortal = () => {
     setIsSubmitting(true);
 
     try {
-      // Simulate blockchain transaction (in production, call smart contract)
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Submit to blockchain
+      const result = await submitAssignmentToBlockchain(assignmentId, fileHash);
+      setTxHash(result.txHash);
+      
+      // Log to backend (optional - doesn't affect success)
+      await logSubmission({
+        student: address!,
+        assignmentId,
+        txHash: result.txHash
+      });
       
       setSubmitted(true);
       toast.success('Assignment submitted successfully to the blockchain!');
     } catch (error: any) {
-      toast.error('Failed to submit assignment: ' + error.message);
+      if (error.message?.includes('Already submitted')) {
+        toast.error('You have already submitted this assignment');
+      } else if (error.code === 'ACTION_REJECTED') {
+        toast.error('Transaction was rejected');
+      } else {
+        toast.error('Failed to submit assignment: ' + (error.reason || error.message));
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const resetForm = () => {
-    setStudentId('');
     setAssignmentId('');
     setFile(null);
     setFileHash('');
     setSubmitted(false);
+    setTxHash('');
   };
 
   if (submitted) {
@@ -108,8 +119,8 @@ const StudentPortal = () => {
               
               <div className="bg-muted/50 rounded-lg p-4 text-left space-y-3 mb-6">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">Student ID</span>
-                  <span className="font-medium font-mono">{studentId}</span>
+                  <span className="text-sm text-muted-foreground">Wallet Address</span>
+                  <span className="font-medium font-mono">{shortenAddress(address!)}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Assignment ID</span>
@@ -119,6 +130,12 @@ const StudentPortal = () => {
                   <span className="text-sm text-muted-foreground">File Hash</span>
                   <span className="font-mono text-xs text-right break-all max-w-[60%]">{fileHash}</span>
                 </div>
+                {txHash && (
+                  <div className="flex justify-between items-start">
+                    <span className="text-sm text-muted-foreground">Transaction Hash</span>
+                    <span className="font-mono text-xs text-right break-all max-w-[60%]">{txHash}</span>
+                  </div>
+                )}
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Timestamp</span>
                   <span className="font-medium">{new Date().toLocaleString()}</span>
@@ -180,22 +197,6 @@ const StudentPortal = () => {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Student ID */}
-              <div className="space-y-2">
-                <Label htmlFor="studentId">Student ID</Label>
-                <div className="relative">
-                  <GraduationCap className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    id="studentId"
-                    placeholder="e.g., STU001"
-                    value={studentId}
-                    onChange={(e) => setStudentId(e.target.value)}
-                    className="pl-10"
-                    maxLength={20}
-                  />
-                </div>
-              </div>
-
               {/* Assignment ID */}
               <div className="space-y-2">
                 <Label htmlFor="assignmentId">Assignment ID</Label>

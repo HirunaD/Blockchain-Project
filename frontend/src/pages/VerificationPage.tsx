@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { generateFileHash, DEMO_SUBMISSIONS } from '@/lib/blockchain';
+import { generateFileHash, verifySubmissionOnBlockchain, shortenAddress } from '@/lib/blockchain';
 import { toast } from 'sonner';
 import {
   CheckCircle,
@@ -15,23 +15,22 @@ import {
   Upload,
   Loader2,
   Shield,
-  GraduationCap,
+  Wallet,
   Clock
 } from 'lucide-react';
 
 interface VerificationResult {
   verified: boolean;
   submission?: {
-    studentId: string;
+    studentAddress: string;
     assignmentId: string;
     fileHash: string;
     timestamp: Date;
-    submitter: string;
   };
 }
 
 const VerificationPage = () => {
-  const [studentId, setStudentId] = useState('');
+  const [studentAddress, setStudentAddress] = useState('');
   const [assignmentId, setAssignmentId] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [manualHash, setManualHash] = useState('');
