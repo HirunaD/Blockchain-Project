@@ -197,19 +197,19 @@ export const DEMO_SUBMISSIONS: Submission[] = [
     studentAddress: '0x742d35Cc6634C0532925a3b844Bc9e7595f8aB21',
     assignmentId: 'ASN001',
     fileHash: '0x7d865e959b2466918c9863afca942d0fb89d7c9ac0c99bafc3749504ded97730',
-    timestamp: new Date('2024-01-15T10:30:00')
+    timestamp: new Date('2026-02-15T10:30:00')
   },
   {
     studentAddress: '0x8ba1f109551bD432803012645Ac136ddd64DBA72',
     assignmentId: 'ASN001',
     fileHash: '0x3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d',
-    timestamp: new Date('2024-01-15T11:45:00')
+    timestamp: new Date('2026-02-20T11:45:00')
   },
   {
     studentAddress: '0xdD2FD4581271e230360230F9337D5c0430Bf44C0',
     assignmentId: 'ASN002',
     fileHash: '0x2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae',
-    timestamp: new Date('2024-01-16T09:15:00')
+    timestamp: new Date('2026-02-20T20:28:00')
   }
 ];
 
